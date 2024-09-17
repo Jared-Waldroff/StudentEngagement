@@ -1,42 +1,27 @@
 import cv2
-import numpy as np
+from ultralytics import YOLO
 
-cfg_path = 'yolov3.cfg'
-weights_path = 'yolov3.weights'
-names_path = 'coco.names'
+model = YOLO("yolov9c.pt")
 
-net = cv2.dnn.readNetFromDarknet(cfg_path, weights_path)
+def predict(chosen_model, img, classes=[], conf=0.5):
+    if classes:
+        results = chosen_model.predict(img, classes=classes, conf=conf)
+    else:
+        results = chosen_model.predict(img, conf=conf)
 
-videoPath = "../Video-Photo Data/Classroom.mov"
+    return results
 
-cap = cv2.VideoCapture(videoPath)
+def predict_and_detect(chosen_model, img, classes=[], conf=0.5, rectangle_thickness=2, text_thickness=1):
+    results = predict(chosen_model, img, classes, conf=conf)
+    for result in results:
+        for box in result.boxes:
+            cv2.rectangle(img, (int(box.xyxy[0][0]), int(box.xyxy[0][1])),
+                          (int(box.xyxy[0][2]), int(box.xyxy[0][3])), (255, 0, 0), rectangle_thickness)
+            cv2.putText(img, f"{result.names[int(box.cls[0])]}",
+                        (int(box.xyxy[0][0]), int(box.xyxy[0][1]) - 10),
+                        cv2.FONT_HERSHEY_PLAIN, 1, (255, 0, 0), text_thickness)
+    return img, results
 
-faceCascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-
-videoCapture = cv2.VideoCapture(videoPath)
-
-if not videoCapture.isOpened():
-    print("Error: Could not open video.")
-    exit()
-
-while True:
-    ret, frame = videoCapture.read()
-
-    if not ret:
-        print("Reached the end of the video or cannot read the frame.")
-        break
-
-    grayVideo = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-    faces = faceCascade.detectMultiScale(grayVideo, scaleFactor=1.05, minNeighbors=4, minSize=(25, 25))
-
-    for (x, y, w, h) in faces:
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 3)
-
-    cv2.imshow('Face Detection', frame)
-
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-videoCapture.release()
-cv2.destroyAllWindows()
+# read the image
+image = cv2.imread("/Users/Jared.Waldroff/PycharmProjects/StudentEngagement/Video-Photo Data/Classroom.mov")
+result_img, _ = predict_and_detect(model, image, classes=[], conf=0.5)
