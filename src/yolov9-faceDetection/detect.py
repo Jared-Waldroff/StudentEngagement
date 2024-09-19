@@ -1,10 +1,18 @@
-import argparse
-import os
 import platform
 import sys
 from pathlib import Path
-
+import os
+import argparse
+import numpy as np
 import torch
+import mediapipe as mp
+import cv2
+
+# Initialize MediaPipe Face Mesh and Drawing tools
+mp_face_mesh = mp.solutions.face_mesh
+face_mesh = mp_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+mp_drawing = mp.solutions.drawing_utils
+drawing_spec = mp_drawing.DrawingSpec(color=(128, 0, 128), thickness=2, circle_radius=1)
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLO root directory
@@ -101,9 +109,6 @@ def run(
         with dt[2]:
             pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
 
-        # Second-stage classifier (optional)
-        # pred = utils.general.apply_classifier(pred, classifier_model, im, im0s)
-
         # Process predictions
         for i, det in enumerate(pred):  # per image
             seen += 1
@@ -143,13 +148,28 @@ def run(
                         annotator.box_label(xyxy, label, color=colors(c, True))
                     if save_crop:
                         save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
+                    # Crop the detected face area
+                    x_min, y_min, x_max, y_max = map(int, xyxy)  # Convert coordinates to integers
+                    face_crop = im0[y_min:y_max, x_min:x_max]  # Crop the face from the image
+
+                    # Save or send this cropped face to headPoseDetection
+                    # You can save it as a file or directly pass the numpy array `face_crop`
+                    # For example, save and pass the path to `headPoseDetection.py`
+                    face_path = f'{save_dir}/crops/{p.stem}_{conf:.2f}.jpg'
+                    try:
+                        cv2.imwrite(face_path, face_crop)
+                        head_pose_result = run_head_pose_detection(face_crop)
+                        cv2.putText(im0, f'{head_pose_result}', (x_min, y_min + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.75,
+                                    (0, 255, 0), 2)
+                    except Exception as e:
+                        print(f"Error processing head pose detection: {e}")
 
             # Stream results
             im0 = annotator.result()
             if view_img:
                 if platform.system() == 'Linux' and p not in windows:
                     windows.append(p)
-                    cv2.namedWindow(str(p), cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)  # allow window resize (Linux)
+                    cv2.namedWindow(str(p), cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)  # allow window resize (Linux)d
                     cv2.resizeWindow(str(p), im0.shape[1], im0.shape[0])
                 cv2.imshow(str(p), im0)
                 cv2.waitKey(1)  # 1 millisecond
@@ -219,6 +239,52 @@ def parse_opt():
     opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand
     print_args(vars(opt))
     return opt
+
+
+def run_head_pose_detection(face_image):
+    # Convert the cropped image to RGB as expected by headPoseDetection
+    face_rgb = cv2.cvtColor(face_image, cv2.COLOR_BGR2RGB)
+
+    # Initialize MediaPipe Face Mesh for head pose detection
+    with mp_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidence=0.5) as face_mesh:
+        results = face_mesh.process(face_rgb)
+
+        if not results.multi_face_landmarks:
+            return "No face landmarks detected"
+
+        face_2d, face_3d = [], []
+        img_h, img_w, _ = face_image.shape
+
+        for face_landmarks in results.multi_face_landmarks:
+            for idx, lm in enumerate(face_landmarks.landmark):
+                if idx in [33, 263, 1, 61, 291, 199]:  # Important landmarks
+                    x, y = int(lm.x * img_w), int(lm.y * img_h)
+                    face_2d.append([x, y])
+                    face_3d.append([x, y, lm.z * 3000])
+
+        face_2d, face_3d = np.array(face_2d, dtype=np.float64), np.array(face_3d, dtype=np.float64)
+        focal_length = 1 * img_w
+        cam_matrix = np.array([[focal_length, 0, img_w / 2],
+                               [0, focal_length, img_h / 2],
+                               [0, 0, 1]])
+        distortion_matrix = np.zeros((4, 1), dtype=np.float64)
+        success, rotation_vec, translation_vec = cv2.solvePnP(face_3d, face_2d, cam_matrix, distortion_matrix)
+
+        # Get rotation angles
+        rmat, _ = cv2.Rodrigues(rotation_vec)
+        angles, _, _, _, _, _ = cv2.RQDecomp3x3(rmat)
+        x_angle, y_angle, _ = angles[0] * 360, angles[1] * 360, angles[2] * 360
+
+        if y_angle < -10:
+            return "Looking Left"
+        elif y_angle > 10:
+            return "Looking Right"
+        elif x_angle < -10:
+            return "Looking Down"
+        elif x_angle > 10:
+            return "Looking Up"
+        else:
+            return "Looking Forward"
 
 
 def main(opt):
