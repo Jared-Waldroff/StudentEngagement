@@ -3,6 +3,7 @@ from dataset import load_daisee_datasets
 from train import train_model
 from save_model import save_model
 
+
 def main():
     # Load the DAiSEE dataset
     train_loader, val_loader, test_loader = load_daisee_datasets()
@@ -12,6 +13,7 @@ def main():
 
     # Save the model
     save_model(model, path='daisee_model.pth')
+
 
 if __name__ == '__main__':
     main()
