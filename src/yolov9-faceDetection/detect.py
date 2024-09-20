@@ -241,15 +241,25 @@ def parse_opt():
     return opt
 
 
+# Global variable to store previous angle values
+previous_y_angle = 0
+
+
+def smooth_angle(current_angle, previous_angle, alpha=0.5):
+    return alpha * current_angle + (1 - alpha) * previous_angle
+
+
 def run_head_pose_detection(face_image):
+    global previous_y_angle
     # Convert the cropped image to RGB as expected by headPoseDetection
     face_rgb = cv2.cvtColor(face_image, cv2.COLOR_BGR2RGB)
 
     # Initialize MediaPipe Face Mesh for head pose detection
-    with mp_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidence=0.5) as face_mesh:
+    with mp_face_mesh.FaceMesh(min_detection_confidence=0.7, min_tracking_confidence=0.7) as face_mesh:
         results = face_mesh.process(face_rgb)
 
-        if not results.multi_face_landmarks:
+        # Ensure 'results' has 'multi_face_landmarks' attribute
+        if not hasattr(results, 'multi_face_landmarks') or results.multi_face_landmarks is None:
             return "No face landmarks detected"
 
         face_2d, face_3d = [], []
@@ -275,13 +285,17 @@ def run_head_pose_detection(face_image):
         angles, _, _, _, _, _ = cv2.RQDecomp3x3(rmat)
         x_angle, y_angle, _ = angles[0] * 360, angles[1] * 360, angles[2] * 360
 
-        if y_angle < -10:
+        # Smooth the y_angle using the previous angle value
+        y_angle = smooth_angle(y_angle, previous_y_angle)
+        previous_y_angle = y_angle  # Update the previous angle
+
+        if y_angle < -30:
             return "Looking Left"
-        elif y_angle > 10:
+        elif y_angle > 30:
             return "Looking Right"
-        elif x_angle < -10:
+        elif x_angle < -30:
             return "Looking Down"
-        elif x_angle > 10:
+        elif x_angle > 30:
             return "Looking Up"
         else:
             return "Looking Forward"
