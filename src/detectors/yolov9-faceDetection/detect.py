@@ -152,18 +152,6 @@ def run(
                     x_min, y_min, x_max, y_max = map(int, xyxy)  # Convert coordinates to integers
                     face_crop = im0[y_min:y_max, x_min:x_max]  # Crop the face from the image
 
-                    # Save or send this cropped face to headPoseDetection
-                    # You can save it as a file or directly pass the numpy array `face_crop`
-                    # For example, save and pass the path to `headPoseDetection.py`
-                    face_path = f'{save_dir}/crops/{p.stem}_{conf:.2f}.jpg'
-                    try:
-                        cv2.imwrite(face_path, face_crop)
-                        head_pose_result = run_head_pose_detection(face_crop)
-                        cv2.putText(im0, f'{head_pose_result}', (x_min, y_min + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.75,
-                                    (0, 255, 0), 2)
-                    except Exception as e:
-                        print(f"Error processing head pose detection: {e}")
-
             # Stream results
             im0 = annotator.result()
             if view_img:
@@ -239,66 +227,6 @@ def parse_opt():
     opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand
     print_args(vars(opt))
     return opt
-
-
-# Global variable to store previous angle values
-previous_y_angle = 0
-
-
-def smooth_angle(current_angle, previous_angle, alpha=0.5):
-    return alpha * current_angle + (1 - alpha) * previous_angle
-
-
-def run_head_pose_detection(face_image):
-    global previous_y_angle
-    # Convert the cropped image to RGB as expected by headPoseDetection
-    face_rgb = cv2.cvtColor(face_image, cv2.COLOR_BGR2RGB)
-
-    # Initialize MediaPipe Face Mesh for head pose detection
-    with mp_face_mesh.FaceMesh(min_detection_confidence=0.7, min_tracking_confidence=0.7) as face_mesh:
-        results = face_mesh.process(face_rgb)
-
-        # Ensure 'results' has 'multi_face_landmarks' attribute
-        if not hasattr(results, 'multi_face_landmarks') or results.multi_face_landmarks is None:
-            return "No face landmarks detected"
-
-        face_2d, face_3d = [], []
-        img_h, img_w, _ = face_image.shape
-
-        for face_landmarks in results.multi_face_landmarks:
-            for idx, lm in enumerate(face_landmarks.landmark):
-                if idx in [33, 263, 1, 61, 291, 199]:  # Important landmarks
-                    x, y = int(lm.x * img_w), int(lm.y * img_h)
-                    face_2d.append([x, y])
-                    face_3d.append([x, y, lm.z * 3000])
-
-        face_2d, face_3d = np.array(face_2d, dtype=np.float64), np.array(face_3d, dtype=np.float64)
-        focal_length = 1 * img_w
-        cam_matrix = np.array([[focal_length, 0, img_w / 2],
-                               [0, focal_length, img_h / 2],
-                               [0, 0, 1]])
-        distortion_matrix = np.zeros((4, 1), dtype=np.float64)
-        success, rotation_vec, translation_vec = cv2.solvePnP(face_3d, face_2d, cam_matrix, distortion_matrix)
-
-        # Get rotation angles
-        rmat, _ = cv2.Rodrigues(rotation_vec)
-        angles, _, _, _, _, _ = cv2.RQDecomp3x3(rmat)
-        x_angle, y_angle, _ = angles[0] * 360, angles[1] * 360, angles[2] * 360
-
-        # Smooth the y_angle using the previous angle value
-        y_angle = smooth_angle(y_angle, previous_y_angle)
-        previous_y_angle = y_angle  # Update the previous angle
-
-        if y_angle < -30:
-            return "Looking Left"
-        elif y_angle > 30:
-            return "Looking Right"
-        elif x_angle < -30:
-            return "Looking Down"
-        elif x_angle > 30:
-            return "Looking Up"
-        else:
-            return "Looking Forward"
 
 
 def main(opt):
