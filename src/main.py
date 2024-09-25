@@ -1,83 +1,30 @@
 import cv2
 import torch
 from pathlib import Path
-import numpy as np
-from detectors import stable_hopenetlite
-from models.common import DetectMultiBackend
-from utils.general import non_max_suppression, scale_boxes, check_img_size
-from utils.torch_utils import select_device
-from utils.plots import Annotator, colors
+from src.models.detect import load_yolo_model, detect_faces, get_boxes
+from src.models.hopenet import load_hopenet_model, preprocess_face, estimate_head_pose, get_head_pose_direction
 
+# Function to select device (CPU or GPU)
+def select_device(device=''):
+    """ Selects the appropriate device based on input ('cpu' or 'cuda'). """
+    if device.lower() == 'cpu':
+        return torch.device('cpu')
+    elif device.lower() == 'cuda' and torch.cuda.is_available():
+        return torch.device('cuda')
+    else:
+        print("Warning: CUDA not available, using CPU instead.")
+        return torch.device('cpu')
 
-# Load YOLO Model
-def load_yolo_model(weights_path, device='cpu'):
-    model = DetectMultiBackend(weights_path, device=device)
-    return model
-
-
-# Load Hopenet Model
-def load_hopenet_model(model_path, device='cpu'):
-    model = stable_hopenetlite.shufflenet_v2_x1_0()
-    state_dict = torch.load(model_path, map_location=device)
-    model.load_state_dict(state_dict, strict=False)
-    model.to(device)
-    model.eval()
-    return model
-
-
-# Preprocess face image for Hopenet
-def preprocess_face(face_image):
-    # Assuming face_image is in BGR format (as in OpenCV)
-    mean = np.array([0.485, 0.456, 0.406])
-    std = np.array([0.229, 0.224, 0.225])
-    resized_face = cv2.resize(face_image, (224, 224))
-    normalized_face = (resized_face / 255.0 - mean) / std
-    tensor_face = torch.tensor(normalized_face).permute(2, 0, 1).unsqueeze(
-        0).float()  # Convert to CHW and add batch dimension
-    return tensor_face
-
-
-# Estimate head pose
-def estimate_head_pose(model, face_tensor, device='cpu'):
-    face_tensor = face_tensor.to(device)
-    with torch.no_grad():
-        yaw, pitch, roll = model(face_tensor)
-    return yaw.item(), pitch.item(), roll.item()
-
-
-# Detect faces using YOLO
-def detect_faces(yolo_model, frame, device='cpu', img_size=(640, 640)):
-    img_size = check_img_size(img_size, s=yolo_model.stride)  # Ensure img_size is compatible
-    img = cv2.resize(frame, img_size)
-    img = img.transpose((2, 0, 1))  # Convert to CHW format
-    img = np.ascontiguousarray(img)
-    img = torch.from_numpy(img).to(device).float() / 255.0  # Normalize
-    if len(img.shape) == 3:
-        img = img[None]  # Add batch dimension
-    with torch.no_grad():
-        pred = yolo_model(img)
-    pred = non_max_suppression(pred, conf_thres=0.5, iou_thres=0.45)
-    return pred
-
-
-# Draw results on frame
-def draw_results(frame, det, head_pose, annotator, label_color=(0, 255, 0)):
-    for (xyxy, pose) in zip(det, head_pose):
-        x_min, y_min, x_max, y_max = map(int, xyxy[:4])
-        annotator.box_label(xyxy, pose, color=label_color)
-
-
-# Main function
 def main():
-    # Paths and device configuration
-    yolo_weights = 'yolov9-faceDetection/preTrainedModel/best.pt'
-    hopenet_weights = 'hopenet-head-pose-detection/model/shuff_epoch_120.pkl'
-    video_source = 0  # Change to file path for video file
-    device = select_device('')  # Change to 'cuda' if GPU is available
+    # Configuration
+    yolo_weights = Path('src/detectors/yolov9faceDetection/preTrainedModel/best.pt')  # Adjust the path as needed
+    hopenet_weights = Path('src/models/shuff_epoch_120.pkl')
+    device = select_device('/Users/Jared.Waldroff/PycharmProjects/StudentEngagement/assets/chiro2.mov')  # Use '' for auto, or 'cuda' for GPU, or 'cpu' for CPU
+    video_source = 0  # Webcam source or path to video file
 
     # Load models
-    yolo_model = load_yolo_model(yolo_weights, device)
-    hopenet_model = load_hopenet_model(hopenet_weights, device)
+    yolo_model = load_yolo_model(yolo_weights, device=device)
+    hopenet_model = load_hopenet_model(hopenet_weights, device=device)
 
     # Video capture
     cap = cv2.VideoCapture(video_source)
@@ -86,52 +33,33 @@ def main():
         if not ret:
             break
 
-        # Detect faces
-        detections = detect_faces(yolo_model, frame, device)
+        # Face detection
+        predictions = detect_faces(yolo_model, frame, device)
+        boxes = get_boxes(predictions, frame.shape)
 
-        # Initialize annotator for drawing
-        annotator = Annotator(frame, line_width=3, example=str('Face'))
-        head_poses = []
+        # Annotate the frame
+        for box in boxes:
+            x_min, y_min, x_max, y_max = map(int, box)
+            face_crop = frame[y_min:y_max, x_min:x_max]
 
-        for det in detections:
-            if len(det):
-                # Rescale boxes from model size to frame size
-                det[:, :4] = scale_boxes((640, 640), det[:, :4], frame.shape).round()
+            # Head pose estimation
+            face_tensor = preprocess_face(face_crop)
+            yaw, pitch, roll = estimate_head_pose(hopenet_model, face_tensor, device)
+            head_pose = get_head_pose_direction(yaw, pitch, roll)
 
-                for *xyxy, conf, cls in reversed(det):
-                    # Crop face from frame
-                    x_min, y_min, x_max, y_max = map(int, xyxy[:4])
-                    face_crop = frame[y_min:y_max, x_min:x_max]
-
-                    # Preprocess and estimate head pose
-                    face_tensor = preprocess_face(face_crop)
-                    yaw, pitch, roll = estimate_head_pose(hopenet_model, face_tensor, device)
-
-                    # Determine head pose direction
-                    if yaw < -15:
-                        pose_label = "Looking Left"
-                    elif yaw > 15:
-                        pose_label = "Looking Right"
-                    elif pitch < -10:
-                        pose_label = "Looking Down"
-                    elif pitch > 10:
-                        pose_label = "Looking Up"
-                    else:
-                        pose_label = "Looking Forward"
-
-                    head_poses.append(pose_label)
-
-        # Draw results
-        draw_results(frame, det, head_poses, annotator)
+            # Draw bounding box and head pose
+            cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
+            cv2.putText(frame, f'{head_pose}', (x_min, y_max + 20),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2)
 
         # Display the frame
-        cv2.imshow('YOLO + Hopenet Head Pose', frame)
+        cv2.imshow('Face and Head Pose Estimation', frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
+    # Release resources
     cap.release()
     cv2.destroyAllWindows()
-
 
 if __name__ == "__main__":
     main()
