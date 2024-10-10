@@ -3,7 +3,7 @@
 import torch
 import torch.nn.functional as F
 import cv2
-from src.stable_hopenetlite import shufflenet_v2_x1_0
+from src.models.deepHeadPoseLiteMaster.stable_hopenetlite import shufflenet_v2_x1_0
 
 def load_hopenet_model(weights_path, device):
     # Load Hopenet model

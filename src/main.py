@@ -1,65 +1,71 @@
 import cv2
 import torch
 from pathlib import Path
-from src.models.detect import load_yolo_model, detect_faces, get_boxes
-from src.models.hopenet import load_hopenet_model, preprocess_face, estimate_head_pose, get_head_pose_direction
+from src.models.hopenet import load_hopenet_model, estimate_head_pose, preprocess_face, get_head_pose_direction
+from src.detectors.yolov9FaceDetectionMain.yolov9.utils.general import non_max_suppression, scale_boxes
+from src.detectors.yolov9FaceDetectionMain.yolov9.utils.torch_utils import select_device
+from src.detectors.yolov9FaceDetectionMain.yolov9.models.common import DetectMultiBackend
 
-# Function to select device (CPU or GPU)
-def select_device(device=''):
-    """ Selects the appropriate device based on input ('cpu' or 'cuda'). """
-    if device.lower() == 'cpu':
-        return torch.device('cpu')
-    elif device.lower() == 'cuda' and torch.cuda.is_available():
-        return torch.device('cuda')
-    else:
-        print("Warning: CUDA not available, using CPU instead.")
-        return torch.device('cpu')
+# Configuration
+yolo_weights = Path('src/detectors/yolov9FaceDetectionMain/preTrainedModel/best.pt')  # Adjust the path accordingly
+hopenet_weights = Path('src/models/shuff_epoch_120k.pth')  # Adjust the path accordingly
+device = select_device('cuda' if torch.cuda.is_available() else 'cpu')
+video_source = 0  # Webcam source or path to video file
 
-def main():
-    # Configuration
-    yolo_weights = Path('src/detectors/yolov9faceDetection/preTrainedModel/best.pt')  # Adjust the path as needed
-    hopenet_weights = Path('src/models/shuff_epoch_120.pkl')
-    device = select_device('/Users/Jared.Waldroff/PycharmProjects/StudentEngagement/assets/chiro2.mov')  # Use '' for auto, or 'cuda' for GPU, or 'cpu' for CPU
-    video_source = 0  # Webcam source or path to video file
+# Load YOLOv9 model
+yolo_model = DetectMultiBackend(yolo_weights, device=device)
+yolo_model.warmup(imgsz=(1, 3, 640, 640))  # Warmup with example input size
 
-    # Load models
-    yolo_model = load_yolo_model(yolo_weights, device=device)
-    hopenet_model = load_hopenet_model(hopenet_weights, device=device)
+# Load HopeNet model
+hopenet_model = load_hopenet_model(hopenet_weights, device=device)
 
-    # Video capture
-    cap = cv2.VideoCapture(video_source)
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+# Video capture
+cap = cv2.VideoCapture(video_source)
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
 
-        # Face detection
-        predictions = detect_faces(yolo_model, frame, device)
-        boxes = get_boxes(predictions, frame.shape)
+    # Preprocess frame for YOLO
+    img = cv2.resize(frame, (640, 640))
+    img = torch.from_numpy(img).to(device)
+    img = img.half() if yolo_model.fp16 else img.float()
+    img /= 255.0  # Normalize
+    img = img.unsqueeze(0)  # Add batch dimension
 
-        # Annotate the frame
-        for box in boxes:
-            x_min, y_min, x_max, y_max = map(int, box)
-            face_crop = frame[y_min:y_max, x_min:x_max]
+    # Face detection with YOLOv9
+    pred = yolo_model(img)
+    pred = non_max_suppression(pred, conf_thres=0.25, iou_thres=0.45)
 
-            # Head pose estimation
+    # Extract and scale bounding boxes
+    boxes = []
+    for det in pred:  # Per image
+        if len(det):
+            det[:, :4] = scale_boxes(img.shape[2:], det[:, :4], frame.shape).round()
+            for *xyxy, conf, cls in det:
+                boxes.append(xyxy)
+
+    # Annotate the frame
+    for box in boxes:
+        x_min, y_min, x_max, y_max = map(int, box)
+        face_crop = frame[y_min:y_max, x_min:x_max]
+
+        # Head pose estimation
+        if face_crop.size != 0:  # Ensure the face crop is valid
             face_tensor = preprocess_face(face_crop)
             yaw, pitch, roll = estimate_head_pose(hopenet_model, face_tensor, device)
             head_pose = get_head_pose_direction(yaw, pitch, roll)
 
             # Draw bounding box and head pose
             cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
-            cv2.putText(frame, f'{head_pose}', (x_min, y_max + 20),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2)
+            cv2.putText(frame, f'Head Pose: {head_pose}', (x_min, y_min - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.75, color=(0, 255, 0), thickness=2)
 
-        # Display the frame
-        cv2.imshow('Face and Head Pose Estimation', frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+    # Display the frame
+    cv2.imshow('Face and Head Pose Estimation', frame)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
-    # Release resources
-    cap.release()
-    cv2.destroyAllWindows()
-
-if __name__ == "__main__":
-    main()
+# Release resources
+cap.release()
+cv2.destroyAllWindows()
