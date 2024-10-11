@@ -178,8 +178,8 @@ def run(
                     x1, y1, x2, y2 = map(int, xyxy)
 
                     # Increase the size of the bounding box by 10% for better head pose estimation
-                    width_increase = int(0.15 * (x2 - x1))
-                    height_increase = int(0.15 * (y2 - y1))
+                    width_increase = int(0.2 * (x2 - x1))
+                    height_increase = int(0.2 * (y2 - y1))
                     x1 = max(0, x1 - width_increase)
                     y1 = max(0, y1 - height_increase)
                     x2 = min(im0.shape[1], x2 + width_increase)
@@ -202,6 +202,31 @@ def run(
                         yaw_predicted = float((yaw_predicted - 33) * 3)
                         pitch_predicted = float((pitch_predicted - 33) * 3)
                         roll_predicted = float((roll_predicted - 33) * 3)
+
+                    # Run DeepFace emotion analysis on the cropped face
+                    try:
+                        # Run DeepFace analysis on the cropped face with "emotion" action
+                        emotion_analysis = DeepFace.analyze(face_crop_pil, actions=['emotion'], enforce_detection=False)
+
+                        # Extract the dominant emotion
+                        dominant_emotion = emotion_analysis[0]['dominant_emotion'] if isinstance(emotion_analysis,
+                                                                                                 list) else \
+                        emotion_analysis['dominant_emotion']
+                        emotion_data = emotion_analysis[0]['emotion'] if isinstance(emotion_analysis, list) else \
+                        emotion_analysis['emotion']
+
+                        # Format emotion data with each emotion and value on a new line, rounded to 2 decimal places
+                        formatted_emotion_data = '\n'.join(
+                            [f"{emotion}: {confidence:.2f}" for emotion, confidence in emotion_data.items()])
+                    except Exception as e:
+                        dominant_emotion = "N/A"  # If detection fails, set to not available
+                        formatted_emotion_data = "Emotion detection failed"
+
+                    # Draw the detected emotion and the detailed analysis on the image
+                    emotion_label_position_y = y1 - 17 if y1 - 17 > 0 else y1 + 15
+                    cv2.putText(im0, f"Dominant Emotion: {dominant_emotion}", (x1, emotion_label_position_y),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.75, (0, 255, 0), 2)
 
                     # Determine engagement type based on yaw and pitch
                     is_engaged_forward = (30 > yaw_predicted > -30) and (30 > pitch_predicted > -50)
@@ -226,20 +251,12 @@ def run(
 
                     drawer.draw_axis(im0, pose, landmarks, bbox)
 
-                    # Run DeepFace emotion analysis on the cropped face
-                    try:
-                        emotion_analysis = DeepFace.analyze(face_crop_pil, actions=['emotion'], enforce_detection=False)
-                        emotion = emotion_analysis['dominant_emotion']
-                    except Exception as e:
-                        emotion = "N/A"  # If detection fails, set to not available
-
-                    # Draw the detected emotion on the image
-                    emotion_label_position_y = y1 - 17 if y1 - 17 > 0 else y1 + 15
-                    cv2.putText(im0, f"Emotion: {emotion}", (x1, emotion_label_position_y), cv2.FONT_HERSHEY_SIMPLEX,
-                                0.75, (0, 255, 0), 2)
-
                     # Print the head pose information for each face
-                    LOGGER.info(f"{face_id}: Yaw: {yaw_predicted:.2f}, Pitch: {pitch_predicted:.2f}, Roll: {roll_predicted:.2f}, Detected Emotion: {emotion}")
+                    LOGGER.info(f"{face_id}: Yaw: {yaw_predicted:.2f}, Pitch: {pitch_predicted:.2f}, Roll: {roll_predicted:.2f}, Detected Emotion: {dominant_emotion}")
+
+                    # Log detailed emotion data for each face
+                    for emotion, confidence in emotion_data.items():
+                        LOGGER.info(f"{face_id} - Emotion: {emotion}, Confidence: {confidence:.2f}")
 
                     if save_crop:
                         save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
