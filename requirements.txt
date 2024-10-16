@@ -34,7 +34,6 @@ coremltools==8.0
 cycler==0.12.1
 decorator==5.1.1
 deepface @ file://./src/models/deepfaceMaster
-deeplake==3.9.24
 defusedxml==0.7.1
 dill==0.3.8
 distro==1.9.0
@@ -89,7 +88,6 @@ keras==3.5.0
 kiwisolver==1.4.7
 lazy_loader==0.4
 libclang==18.1.1
-libdeeplake==0.0.146
 lz4==4.3.3
 Markdown==3.7
 markdown-it-py==3.0.0
