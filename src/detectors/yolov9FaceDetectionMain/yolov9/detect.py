@@ -106,6 +106,20 @@ def run(
         transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
     ])
 
+    def map_emotion_to_category(emotion):
+        positive_emotions = ['happy', 'surprise']
+        negative_emotions = ['angry', 'disgust', 'fear', 'sad']
+        neutral_emotions = ['neutral']
+
+        if emotion in positive_emotions:
+            return 'Positive'
+        elif emotion in negative_emotions:
+            return 'Negative'
+        elif emotion in neutral_emotions:
+            return 'Neutral'
+        else:
+            return 'Neutral'  # Default to Neutral for any undefined emotions
+
     # Initialize the SORT tracker
     tracker = Sort(max_age=1, min_hits=3, iou_threshold=0.3)
     track_poses = {}
@@ -127,9 +141,10 @@ def run(
     # Run inference
     model.warmup(imgsz=(1 if pt or model.triton else bs, 3, *imgsz))  # warmup
     seen, windows, dt = 0, [], (Profile(), Profile(), Profile())
-    engaged_count = 0  # Initialize count for engaged students
+    engaged_faces = set()  # Initialize set for engaged students
+    discussion_faces = set()  # Initialize set for students in discussion
+    negative_faces = set()  # Initialize set for negative emotions
     total_faces = 0  # Total faces detected
-    peer_discussion_count = 0  # Number of students chatting with someone else
 
     for path, im, im0s, vid_cap, s in dataset:
         with dt[0]:
@@ -155,7 +170,8 @@ def run(
 
             p = Path(p)  # to Path
             save_path = str(save_dir / p.name)  # e.g., 'runs/detect/exp/image.jpg'
-            txt_path = str(save_dir / 'labels' / p.stem) + (f'_{frame}' if dataset.mode != 'image' else '')  # e.g., 'runs/detect/exp/labels/image.txt'
+            txt_path = str(save_dir / 'labels' / p.stem) + (
+                f'_{frame}' if dataset.mode != 'image' else '')  # e.g., 'runs/detect/exp/labels/image.txt'
             s += '%gx%g ' % im.shape[2:]  # print string
             annotator = Annotator(im0, line_width=line_thickness, example=str(names))
 
@@ -184,18 +200,14 @@ def run(
                 # Update tracker
                 tracks = tracker.update(detections)
 
-                # Prepare set to keep track of active track IDs
-                active_track_ids = set()
-
-                # Reset counters for the current frame
-                engaged_count = 0
-                peer_discussion_count = 0
-                total_faces = 0
+                # Initialize sets to track unique engaged and discussion participants
+                engaged_faces_frame = set()
+                discussion_faces_frame = set()
+                total_faces_frame = 0
 
                 # Process each track
                 for track in tracks:
                     x1, y1, x2, y2, track_id = track.astype(int)
-                    active_track_ids.add(track_id)
 
                     # Smooth bounding boxes
                     if track_id not in track_bboxes:
@@ -250,7 +262,7 @@ def run(
                     # Use the smoothed head pose
                     pose_smoothed = [(avg_yaw, avg_pitch, avg_roll)]
 
-                    # Draw bounding boxes with face numbering
+                    # Assign face_id before the try-except block
                     face_id = track_id  # Using track_id as face_id for consistency
 
                     # Run DeepFace emotion analysis on the cropped face
@@ -275,34 +287,50 @@ def run(
                         dominant_emotion = emotion_analysis.get('dominant_emotion', 'N/A')
                         emotion_data = emotion_analysis.get('emotion', {})
 
+                        # Find the highest confidence emotion
+                        if emotion_data:
+                            dominant_emotion_conf = max(emotion_data, key=emotion_data.get)
+                            confidence = emotion_data[dominant_emotion_conf]
+                            if confidence >= 80:
+                                emotion_category = map_emotion_to_category(dominant_emotion_conf)
+                            else:
+                                emotion_category = 'Neutral'
+                        else:
+                            emotion_category = 'Neutral'
+
+                        LOGGER.info(f"Face {face_id} - Dominant Emotion: {dominant_emotion}")
+                        LOGGER.info(f"Face {face_id} - Emotion Category: {emotion_category}")
+                        LOGGER.info(f"Face {face_id} - Emotion Scores: {emotion_data}")
+
+                        # Determine engagement based on head pose and emotion category
+                        if emotion_category in ['Positive', 'Neutral']:
+                            engaged_faces_frame.add(face_id)  # Add to engaged set
+                        elif emotion_category == 'Negative':
+                            negative_faces.add(face_id)  # Add to negative set
+
                     except Exception as e:
                         LOGGER.error(f"Face {face_id} - Emotion Analysis Error: {e}")
-                        dominant_emotion = "N/A"
-                        emotion_data = {}
+                        emotion_category = 'Neutral'
 
-                    # Determine engagement type based on yaw and pitch
-                    is_engaged_forward = (30 > avg_yaw > -30) and (30 > avg_pitch > -50)
+                    # Determine peer discussion based on yaw angle
                     is_peer_discussion = abs(avg_yaw) > 30
 
-                    if is_engaged_forward:
-                        engaged_status = 'Yes'
-                        engaged_count += 1
-                    else:
-                        engaged_status = 'No'
-
                     if is_peer_discussion:
-                        peer_discussion_count += 1
+                        discussion_faces_frame.add(face_id)  # Add to discussion set
 
-                    total_faces += 1
+                    if emotion_category in ['Positive', 'Neutral'] or is_peer_discussion:
+                        total_faces_frame += 1  # Count only engaged or in discussion
 
                     # Draw the pose estimation and labels
                     landmarks = [[((x1 + x2) // 2, (y1 + y2) // 2)]]
                     bbox_dict = {"face": [x1, y1, x2, y2]}
 
-                    drawer.draw_axis(im0, pose_smoothed, landmarks, bbox_dict, dominant_emotion, face_id, axis_size=100)  # Adjust axis_size as needed
+                    drawer.draw_axis(im0, pose_smoothed, landmarks, bbox_dict, emotion_category, face_id,
+                                     axis_size=100)  # Adjust axis_size as needed
 
                     # Log head pose and emotion information to terminal
-                    LOGGER.info(f"Face {face_id}: Yaw: {avg_yaw:.2f}, Pitch: {avg_pitch:.2f}, Roll: {avg_roll:.2f}, Detected Emotion: {dominant_emotion}")
+                    LOGGER.info(
+                        f"Face {face_id}: Yaw: {avg_yaw:.2f}, Pitch: {avg_pitch:.2f}, Roll: {avg_roll:.2f}, Detected Emotion: {emotion_category}")
 
                     # Log detailed emotion data for each face
                     for emotion, confidence in emotion_data.items():
@@ -311,96 +339,118 @@ def run(
                     if save_crop:
                         save_one_box([x1, y1, x2, y2], im0, file=save_dir / 'crops' / f'Face_{face_id}.jpg', BGR=True)
 
-                else:
-                    LOGGER.info('No detections')
-
-                # **Calculate engagement score and determine mode within the frame loop**
-                if total_faces > 0:
-                    engaged_score = (engaged_count / total_faces) * 100
-                    discussion_score = (peer_discussion_count / total_faces) * 100
-                else:
-                    engaged_score = 0
-                    discussion_score = 0
-
-                # Determine classroom mode
-                if engaged_score > discussion_score:
-                    mode = "Lecture Mode"
-                elif engaged_score < discussion_score:
-                    mode = "Peer Discussion Mode"
-                else:
-                    mode = "Mixed Engagement"
-
-                # Log engagement and mode
-                LOGGER.info(f"Engagement Score: {engaged_count}/{total_faces} ({engaged_score:.2f}%) engaged")
-                LOGGER.info(f"Discussion Score: {peer_discussion_count}/{total_faces} ({discussion_score:.2f}%) in discussion")
-                LOGGER.info(f"Current Classroom Mode: {mode}")
-
-                # **Overlay the summary information on the frame**
-                drawer.draw_summary(im0, engaged_count, total_faces, engaged_score,
-                                    peer_discussion_count, discussion_score, mode)
-
+            # **Calculate engagement scores**
+            if total_faces_frame > 0:
+                engaged_score = (len(engaged_faces_frame) / total_faces_frame) * 100
+                discussion_score = (len(discussion_faces_frame) / total_faces_frame) * 100
+                total_engagement_score = ((len(engaged_faces_frame) + len(
+                    discussion_faces_frame)) / total_faces_frame) * 100
+                total_engagement_score = min(total_engagement_score, 100.0)
             else:
-                LOGGER.info('No detections')
+                engaged_score = 0
+                discussion_score = 0
+                total_engagement_score = 0
 
-            # Stream results
-            im0 = annotator.result()
+            # Determine classroom mode
+            if engaged_score > discussion_score:
+                mode = "Lecture Mode"
+                total_engagement_score = engaged_score
+            elif engaged_score < discussion_score:
+                mode = "Peer Discussion Mode"
+                total_engagement_score = discussion_score
+            else:
+                mode = "Mixed Engagement"
+                total_engagement_score = (engaged_score + discussion_score) / 2
 
-            if view_img:
-                if platform.system() == 'Linux':
-                    cv2.namedWindow(str(p), cv2.WINDOW_NORMAL)
-                    cv2.resizeWindow(str(p), im0.shape[1], im0.shape[0])
-                cv2.imshow(str(p), im0)
-                if cv2.waitKey(1) == ord('q'):  # Press 'q' to quit
-                    raise StopIteration
+            # Log engagement and mode
+            LOGGER.info(
+                f"Engagement Score: {len(engaged_faces_frame)}/{total_faces_frame} ({engaged_score:.2f}%) engaged")
+            LOGGER.info(
+                f"Discussion Score: {len(discussion_faces_frame)}/{total_faces_frame} ({discussion_score:.2f}%) in discussion")
+            LOGGER.info(f"Total Engagement Score: {total_engagement_score:.2f}%")
+            LOGGER.info(f"Current Classroom Mode: {mode}")
 
-            # Save results (video with detections)
-            if save_img:
-                if vid_path != save_path:  # new video
-                    vid_path = save_path
-                    if isinstance(vid_writer, cv2.VideoWriter):
-                        vid_writer.release()  # release previous video writer
-                    if vid_cap:  # video
-                        fps = vid_cap.get(cv2.CAP_PROP_FPS)
-                        w = int(vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                        h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                    else:  # stream or images
-                        fps, w, h = 30, im0.shape[1], im0.shape[0]
-                    save_path = str(Path(save_path).with_suffix('.mp4'))  # enforce .mp4 extension
-                    vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
-                vid_writer.write(im0)
+            # **Overlay the summary information on the frame**
+            drawer.draw_summary(im0, len(engaged_faces_frame), len(discussion_faces_frame), total_faces_frame,
+                                engaged_score, discussion_score, total_engagement_score, mode)
 
-            # Print time (inference-only)
-            LOGGER.info(f"{s}{'' if len(det) else '(no detections), '}{dt[1].dt * 1E3:.1f}ms")
+        else:
+            LOGGER.info('No detections')
+
+        # Stream results
+        im0 = annotator.result()
+
+        if view_img:
+            if platform.system() == 'Linux':
+                cv2.namedWindow(str(p), cv2.WINDOW_NORMAL)
+                cv2.resizeWindow(str(p), im0.shape[1], im0.shape[0])
+            cv2.imshow(str(p), im0)
+            if cv2.waitKey(1) == ord('q'):  # Press 'q' to quit
+                raise StopIteration
+
+        # Save results (video with detections)
+        if save_img:
+            if vid_path != save_path:  # new video
+                vid_path = save_path
+                if isinstance(vid_writer, cv2.VideoWriter):
+                    vid_writer.release()  # release previous video writer
+                if vid_cap:  # video
+                    fps = vid_cap.get(cv2.CAP_PROP_FPS)
+                    w = int(vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                else:  # stream or images
+                    fps, w, h = 30, im0.shape[1], im0.shape[0]
+                save_path = str(Path(save_path).with_suffix('.mp4'))  # enforce .mp4 extension
+                vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
+            vid_writer.write(im0)
+
+        # Print time (inference-only)
+        LOGGER.info(f"{s}{'' if len(det) else '(no detections), '}{dt[1].dt * 1E3:.1f}ms")
 
     # After all frames are processed
     # Release video writer
     if save_img and isinstance(vid_writer, cv2.VideoWriter):
         vid_writer.release()
 
-    # Calculate engagement score if faces were detected
-    if total_faces > 0:
-        engaged_score = (engaged_count / total_faces) * 100
-        discussion_score = (peer_discussion_count / total_faces) * 100
+    # Calculate final engagement scores after all frames are processed
+    if total_faces_frame > 0:
+        engaged_score = (len(engaged_faces_frame) / total_faces_frame) * 100
+        discussion_score = (len(discussion_faces_frame) / total_faces_frame) * 100
+        total_engagement_score = ((len(engaged_faces_frame) + len(discussion_faces_frame)) / total_faces_frame) * 100
+        total_engagement_score = min(total_engagement_score, 100.0)
     else:
         engaged_score = 0
         discussion_score = 0
+        total_engagement_score = 0
 
-    # Determine classroom mode
+    # Determine final classroom mode
     if engaged_score > discussion_score:
         mode = "Lecture Mode"
+        total_engagement_score = engaged_score
     elif engaged_score < discussion_score:
         mode = "Peer Discussion Mode"
+        total_engagement_score = discussion_score
     else:
         mode = "Mixed Engagement"
+        total_engagement_score = (engaged_score + discussion_score) / 2
 
-    # Log engagement and mode
-    LOGGER.info(f"Engagement Score: {engaged_count}/{total_faces} ({engaged_score:.2f}%) engaged")
-    LOGGER.info(f"Discussion Score: {peer_discussion_count}/{total_faces} ({discussion_score:.2f}%) in discussion")
-    LOGGER.info(f"Current Classroom Mode: {mode}")
+    # Log final engagement and mode
+    LOGGER.info(
+        f"Final Engagement Score: {len(engaged_faces_frame)}/{total_faces_frame} ({engaged_score:.2f}%) engaged")
+    LOGGER.info(
+        f"Final Discussion Score: {len(discussion_faces_frame)}/{total_faces_frame} ({discussion_score:.2f}%) in discussion")
+    LOGGER.info(f"Final Total Engagement Score: {total_engagement_score:.2f}%")
+    LOGGER.info(f"Final Classroom Mode: {mode}")
 
     # **Overlay the final summary information on the last frame (optional)**
     # Uncomment the following line if you want to overlay the summary on the last frame
-    # drawer.draw_summary(im0, engaged_count, total_faces, engaged_score, peer_discussion_count, discussion_score, mode)
+    # drawer.draw_summary(im0, len(engaged_faces_frame), len(discussion_faces_frame), total_faces_frame, engaged_score, discussion_score, total_engagement_score, mode)
+
+    # Optionally, overlay the final total engagement score directly
+    cv2.putText(im0, f'Final Total Engagement: {total_engagement_score:.2f}%',
+                (10, im0.shape[0] - 10),  # Position at bottom-left corner
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7, (0, 255, 255), 2, cv2.LINE_AA)  # Yellow color
 
     # Print results
     t = tuple(x.t / seen * 1E3 for x in dt)  # speeds per image
@@ -410,6 +460,7 @@ def run(
         LOGGER.info(s)
     if update:
         strip_optimizer(weights[0])  # update model (to fix SourceChangeWarning)
+
 
 def parse_opt():
     parser = argparse.ArgumentParser()

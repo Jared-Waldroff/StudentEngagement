@@ -3,6 +3,7 @@ import numpy as np
 import math
 import os
 
+
 class Drawer:
 
     def __getinstance(self, image, intype):
@@ -44,8 +45,19 @@ class Drawer:
                     cv2.circle(image, (int(x), int(y)), thickness, color, thickness)
         return cv2.flip(image, 1)
 
-    def draw_axis(self, image, pose, landmarks, bbox, dominant_emotion, face_id, axis_size=100):
-        """Draws pose axes and orientation text on the image."""
+    def draw_axis(self, image, pose, landmarks, bbox, emotion_category, face_id, axis_size=100):
+        """
+        Draws pose axes and orientation text on the image.
+
+        Parameters:
+        - image (numpy.ndarray): The video frame on which to draw.
+        - pose (list): List of tuples containing yaw, pitch, and roll angles.
+        - landmarks (list): List of landmark coordinates.
+        - bbox (dict): Dictionary containing bounding box information.
+        - emotion_category (str): Categorized emotion ('Positive', 'Negative', 'Neutral').
+        - face_id (int): Unique identifier for the face.
+        - axis_size (int): Length of the axes to be drawn.
+        """
         image = self.__getinstance(image, str)
         for i, lms in enumerate(landmarks):
             if lms is not None:
@@ -88,22 +100,22 @@ class Drawer:
                 cv2.line(image, origin, y_axis, (0, 255, 0), 2)  # Y-axis (green)
                 cv2.line(image, origin, z_axis, (255, 0, 0), 2)  # Z-axis (blue)
 
-                # Determine engagement status
+                # Determine engagement status based on pose and emotion category
                 engaged_text = "Engaged"
-                if pitch > 30 or pitch < -50 or yaw > 30 or yaw < -30:
+                if (pitch > 30 or pitch < -50) or (yaw > 30 or yaw < -30) or emotion_category == "Negative":
                     engaged_text = 'Not Engaged'
 
                 # Draw 'Emotion' and 'Engaged' labels
                 if "face" in bbox:
                     x1, y1, x2, y2 = bbox["face"]
                     # Emotion label
-                    cv2.rectangle(image, (int(x1), int(y1) - 40), (int(x1) + 200, int(y1) - 0), (0, 200, 200), -1)
-                    cv2.putText(image, f"Emotion: {dominant_emotion}", (int(x1) + 10, int(y1) - 10),
+                    cv2.rectangle(image, (int(x1), int(y1) - 50), (int(x1) + 250, int(y1) - 10), (0, 200, 200), -1)
+                    cv2.putText(image, f"Emotion: {emotion_category}", (int(x1) + 10, int(y1) - 30),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
 
                     # Engaged label (above Emotion)
-                    cv2.rectangle(image, (int(x1), int(y1) - 80), (int(x1) + 200, int(y1) - 40), (255, 200, 20), -1)
-                    cv2.putText(image, engaged_text, (int(x1) + 10, int(y1) - 50),
+                    cv2.rectangle(image, (int(x1), int(y1) - 90), (int(x1) + 250, int(y1) - 50), (255, 200, 20), -1)
+                    cv2.putText(image, engaged_text, (int(x1) + 10, int(y1) - 70),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
 
                     # Display yaw, pitch, and roll angles below the bounding box
@@ -138,25 +150,28 @@ class Drawer:
 
         return image
 
-    def draw_summary(self, image, engaged_count, total_faces, engaged_score, peer_discussion_count, discussion_score, mode):
+    def draw_summary(self, image, engaged_count, discussion_count, total_faces, engaged_score, discussion_score,
+                     total_engagement_score, mode):
         """
         Draws the summary information in the bottom corner of the video frame.
 
         Parameters:
         - image (numpy.ndarray): The video frame on which to draw.
         - engaged_count (int): Number of engaged students.
+        - discussion_count (int): Number of students in peer discussions.
         - total_faces (int): Total number of faces detected.
         - engaged_score (float): Percentage of engaged students.
-        - peer_discussion_count (int): Number of students in peer discussions.
         - discussion_score (float): Percentage of students in peer discussions.
+        - total_engagement_score (float): Combined engagement score.
         - mode (str): Current classroom mode.
         """
 
         # Define the text lines
         text_lines = [
             f'Engagement Score: {engaged_count}/{total_faces} ({engaged_score:.2f}%) engaged',
-            f'Discussion Score: {peer_discussion_count}/{total_faces} ({discussion_score:.2f}%) in discussion',
-            f'Current Classroom Mode: {mode}'
+            f'Discussion Score: {discussion_count}/{total_faces} ({discussion_score:.2f}%) in discussion',
+            f'Total Engagement Score: {total_engagement_score:.2f}%',
+            f'Classroom Mode: {mode}'
         ]
 
         # Font settings
@@ -164,7 +179,7 @@ class Drawer:
         font_scale = 0.6
         font_thickness = 2
         text_color = (255, 255, 255)  # White text
-        bg_color = (0, 255, 0)        # Green background
+        bg_color = (0, 255, 0)  # Green background
 
         # Calculate the height of each text line
         text_heights = []
@@ -175,8 +190,8 @@ class Drawer:
             text_heights.append(h)
 
         # Calculate the size of the background rectangle
-        padding = 10        # Padding around the text
-        line_spacing = 5    # Space between lines
+        padding = 10  # Padding around the text
+        line_spacing = 5  # Space between lines
         total_text_height = sum(text_heights) + (len(text_lines) - 1) * line_spacing
         max_text_width = max(text_widths)
 
