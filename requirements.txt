@@ -18,7 +18,7 @@ attrs==24.2.0
 beautifulsoup4==4.12.3
 blinker==1.8.2
 boto3==1.35.22
-botocore==1.35.22
+botocore==1.34.8
 cattrs==24.1.2
 certifi==2024.7.4
 cffi==1.17.1
@@ -33,7 +33,7 @@ contourpy==1.3.0
 coremltools==8.0
 cycler==0.12.1
 decorator==5.1.1
-deepface @ file://./src/models/deepfaceMaster
+deepface
 defusedxml==0.7.1
 dill==0.3.8
 distro==1.9.0
