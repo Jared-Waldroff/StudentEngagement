@@ -97,21 +97,109 @@ class Drawer:
                 if "face" in bbox:
                     x1, y1, x2, y2 = bbox["face"]
                     # Emotion label
-                    cv2.rectangle(image, (int(x1), int(y1) - 80), (int(x1) + 200, int(y1) - 40), (0, 200, 200), -1)
-                    cv2.putText(image, f"Emotion: {dominant_emotion}", (int(x1) + 10, int(y1) - 50),
+                    cv2.rectangle(image, (int(x1), int(y1) - 40), (int(x1) + 200, int(y1) - 0), (0, 200, 200), -1)
+                    cv2.putText(image, f"Emotion: {dominant_emotion}", (int(x1) + 10, int(y1) - 10),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
 
                     # Engaged label (above Emotion)
-                    cv2.rectangle(image, (int(x1), int(y1) - 120), (int(x1) + 200, int(y1) - 80), (255, 200, 20), -1)
-                    cv2.putText(image, engaged_text, (int(x1) + 10, int(y1) - 90),
+                    cv2.rectangle(image, (int(x1), int(y1) - 80), (int(x1) + 200, int(y1) - 40), (255, 200, 20), -1)
+                    cv2.putText(image, engaged_text, (int(x1) + 10, int(y1) - 50),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
 
                     # Display yaw, pitch, and roll angles below the bounding box
-                    cv2.putText(image, f"yaw: {yaw:.2f}", (int(x1), int(y2) + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.75,
+                    cv2.putText(image, f"yaw: {yaw:.2f}", (int(x1), int(y2) + 0), cv2.FONT_HERSHEY_SIMPLEX, 0.75,
                                 (0, 255, 0), 2)
-                    cv2.putText(image, f"pitch: {pitch:.2f}", (int(x1), int(y2) + 45), cv2.FONT_HERSHEY_SIMPLEX,
+                    cv2.putText(image, f"pitch: {pitch:.2f}", (int(x1), int(y2) + 25), cv2.FONT_HERSHEY_SIMPLEX,
                                 0.75, (255, 0, 0), 2)
-                    cv2.putText(image, f"roll: {roll:.2f}", (int(x1), int(y2) + 70), cv2.FONT_HERSHEY_SIMPLEX, 0.75,
+                    cv2.putText(image, f"roll: {roll:.2f}", (int(x1), int(y2) + 50), cv2.FONT_HERSHEY_SIMPLEX, 0.75,
                                 (0, 0, 255), 2)
 
+                    # **Draw Face ID directly above the face without a green box**
+                    text = f'ID: {face_id}'
+                    font = cv2.FONT_HERSHEY_SIMPLEX
+                    font_scale = 0.6
+                    font_thickness = 2
+                    text_color = (255, 255, 255)  # White color for text
+
+                    # Get the size of the text
+                    (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, font_thickness)
+                    # Position the text above the bounding box
+                    text_x = x1 - 30
+                    text_y = y1 + 20
+
+                    # Put the white text directly without any background
+                    cv2.putText(image, text,
+                                (text_x, text_y),
+                                font,
+                                font_scale,
+                                text_color,
+                                font_thickness,
+                                cv2.LINE_AA)
+
         return image
+
+    def draw_summary(self, image, engaged_count, total_faces, engaged_score, peer_discussion_count, discussion_score, mode):
+        """
+        Draws the summary information in the bottom corner of the video frame.
+
+        Parameters:
+        - image (numpy.ndarray): The video frame on which to draw.
+        - engaged_count (int): Number of engaged students.
+        - total_faces (int): Total number of faces detected.
+        - engaged_score (float): Percentage of engaged students.
+        - peer_discussion_count (int): Number of students in peer discussions.
+        - discussion_score (float): Percentage of students in peer discussions.
+        - mode (str): Current classroom mode.
+        """
+
+        # Define the text lines
+        text_lines = [
+            f'Engagement Score: {engaged_count}/{total_faces} ({engaged_score:.2f}%) engaged',
+            f'Discussion Score: {peer_discussion_count}/{total_faces} ({discussion_score:.2f}%) in discussion',
+            f'Current Classroom Mode: {mode}'
+        ]
+
+        # Font settings
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.6
+        font_thickness = 2
+        text_color = (255, 255, 255)  # White text
+        bg_color = (0, 255, 0)        # Green background
+
+        # Calculate the height of each text line
+        text_heights = []
+        text_widths = []
+        for text in text_lines:
+            (w, h), _ = cv2.getTextSize(text, font, font_scale, font_thickness)
+            text_widths.append(w)
+            text_heights.append(h)
+
+        # Calculate the size of the background rectangle
+        padding = 10        # Padding around the text
+        line_spacing = 5    # Space between lines
+        total_text_height = sum(text_heights) + (len(text_lines) - 1) * line_spacing
+        max_text_width = max(text_widths)
+
+        # Calculate the width of the box (half the screen width)
+        img_height, img_width = image.shape[:2]
+        box_width = img_width // 2  # Half the screen width
+
+        # Positioning the background rectangle in the bottom-left corner
+        bg_x1 = 0
+        bg_y1 = img_height - total_text_height - 2 * padding
+        bg_x2 = box_width
+        bg_y2 = img_height
+
+        # Draw the background rectangle
+        cv2.rectangle(image, (bg_x1, bg_y1), (bg_x2, bg_y2), bg_color, cv2.FILLED)
+
+        # Initialize the starting y-coordinate for the first line of text
+        current_y = bg_y1 + padding + text_heights[0]
+
+        # Draw each line of text
+        for idx, text in enumerate(text_lines):
+            text_x = bg_x1 + padding  # 10 pixels from the left edge
+            cv2.putText(image, text, (text_x, current_y), font, font_scale, text_color, font_thickness, cv2.LINE_AA)
+            current_y += text_heights[idx] + line_spacing  # Move to the next line
+
+        return image  # Optional: return the modified image
