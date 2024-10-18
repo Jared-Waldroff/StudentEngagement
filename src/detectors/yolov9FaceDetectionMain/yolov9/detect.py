@@ -39,6 +39,7 @@ from utils.general import (LOGGER, Profile, check_file, check_img_size, check_im
 from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import select_device, smart_inference_mode
 
+
 @smart_inference_mode()
 def run(
         weights=ROOT / 'yolo.pt',  # model path or triton URL
@@ -264,6 +265,9 @@ def run(
 
                     # Assign face_id before the try-except block
                     face_id = track_id  # Using track_id as face_id for consistency
+
+                    # Initialize emotion_data
+                    emotion_data = {}
 
                     # Run DeepFace emotion analysis on the cropped face
                     try:
@@ -499,9 +503,11 @@ def parse_opt():
     print_args(vars(opt))
     return opt
 
+
 def main(opt):
     check_requirements(exclude=('tensorboard', 'thop'))
     run(**vars(opt))
+
 
 if __name__ == "__main__":
     opt = parse_opt()
