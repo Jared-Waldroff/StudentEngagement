@@ -45,7 +45,7 @@ class Drawer:
                     cv2.circle(image, (int(x), int(y)), thickness, color, thickness)
         return cv2.flip(image, 1)
 
-    def draw_axis(self, image, pose, landmarks, bbox, emotion_category, face_id, axis_size=100):
+    def draw_axis(self, image, pose, landmarks, bbox, emotion_category, face_id, axis_size=10):
         """
         Draws pose axes and orientation text on the image.
 
@@ -69,75 +69,81 @@ class Drawer:
                 pitch_rad = np.deg2rad(pitch)
                 roll_rad = np.deg2rad(roll)
 
-                # Adjust the yaw angle (depending on coordinate system)
+                # Convert yaw to negative since the axes are flipped
                 yaw_rad = -yaw_rad
 
-                # Rotation matrix using Rodrigues formula
+                # Build the rotation vector (pitch, yaw, roll)
                 rotation_vector = np.array([pitch_rad, yaw_rad, roll_rad])
-                rotation_matrix, _ = cv2.Rodrigues(rotation_vector)
 
-                # Define axis points in 3D space
-                axis = np.float32([[axis_size, 0, 0],
-                                   [0, axis_size, 0],
-                                   [0, 0, axis_size],
-                                   [0, 0, 0]]).reshape(-1, 3)
+                # Compute rotation matrix
+                rotation_matrix = cv2.Rodrigues(rotation_vector)[0].astype(np.float64)
 
-                # Project 3D points to 2D image plane
-                img_points, _ = cv2.projectPoints(axis, rotation_vector, np.array([0, 0, 0], dtype=float),
-                                                  np.eye(3), np.zeros((4, 1)))
-                img_points = img_points.reshape(-1, 2)
+                # Create axes points in 3D
+                axes_points = np.array([
+                    [1, 0, 0, 0],
+                    [0, 1, 0, 0],
+                    [0, 0, 1, 0]
+                ], dtype=np.float64)
 
-                # Shift points to the landmark position
-                img_points += np.array([x, y])
+                # Rotate axes points
+                axes_points = rotation_matrix @ axes_points
 
-                origin = tuple(img_points[3].astype(int))
-                x_axis = tuple(img_points[0].astype(int))
-                y_axis = tuple(img_points[1].astype(int))
-                z_axis = tuple(img_points[2].astype(int))
+                # Scale axes
+                axes_points = (axes_points[:2, :] * axis_size).astype(int)
+
+                # Displace the axes points by the nose point coordinates
+                axes_points[0, :] += int(x)
+                axes_points[1, :] += int(y)
+
+                # Extract points for drawing
+                origin = tuple(axes_points[:, 3].ravel())
+                x_axis = tuple(axes_points[:, 0].ravel())
+                y_axis = tuple(axes_points[:, 1].ravel())
+                z_axis = tuple(axes_points[:, 2].ravel())
 
                 # Draw the axes
-                cv2.line(image, origin, x_axis, (0, 0, 255), 2)  # X-axis (red)
+                cv2.line(image, origin, x_axis, (255, 0, 0), 2)  # X-axis (red)
                 cv2.line(image, origin, y_axis, (0, 255, 0), 2)  # Y-axis (green)
-                cv2.line(image, origin, z_axis, (255, 0, 0), 2)  # Z-axis (blue)
+                cv2.line(image, origin, z_axis, (0, 0, 255), 2)  # Z-axis (blue)
 
                 # Determine engagement status based on pose and emotion category
                 engaged_text = "Engaged"
                 if (pitch > 30 or pitch < -50) or (yaw > 30 or yaw < -30) or emotion_category == "Negative":
                     engaged_text = 'Not Engaged'
 
-                # Draw 'Emotion' and 'Engaged' labels
+                # Draw 'Emotion' and 'Engaged' labels with adjusted positions
                 if "face" in bbox:
                     x1, y1, x2, y2 = bbox["face"]
-                    # Emotion label
-                    cv2.rectangle(image, (int(x1), int(y1) - 50), (int(x1) + 250, int(y1) - 10), (0, 200, 200), -1)
-                    cv2.putText(image, f"Emotion: {emotion_category}", (int(x1) + 10, int(y1) - 30),
+
+                    # Adjust positions as needed
+                    # Emotion label (move up by 10 pixels)
+                    cv2.rectangle(image, (int(x1), int(y1) - 60), (int(x1) + 250, int(y1) - 20), (0, 200, 200), -1)
+                    cv2.putText(image, f"Emotion: {emotion_category}", (int(x1) + 10, int(y1) - 40),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
 
-                    # Engaged label (above Emotion)
-                    cv2.rectangle(image, (int(x1), int(y1) - 90), (int(x1) + 250, int(y1) - 50), (255, 200, 20), -1)
-                    cv2.putText(image, engaged_text, (int(x1) + 10, int(y1) - 70),
+                    # Engaged label (move up by 10 pixels)
+                    cv2.rectangle(image, (int(x1), int(y1) - 100), (int(x1) + 250, int(y1) - 60), (255, 200, 20), -1)
+                    cv2.putText(image, engaged_text, (int(x1) + 10, int(y1) - 80),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
 
-                    # Display yaw, pitch, and roll angles below the bounding box
-                    cv2.putText(image, f"yaw: {yaw:.2f}", (int(x1), int(y2) + 0), cv2.FONT_HERSHEY_SIMPLEX, 0.75,
+                    # Display yaw, pitch, and roll angles below the bounding box (move down by 10 pixels)
+                    cv2.putText(image, f"yaw: {yaw:.2f}", (int(x1), int(y2) + 10), cv2.FONT_HERSHEY_SIMPLEX, 0.75,
                                 (0, 255, 0), 2)
-                    cv2.putText(image, f"pitch: {pitch:.2f}", (int(x1), int(y2) + 25), cv2.FONT_HERSHEY_SIMPLEX,
+                    cv2.putText(image, f"pitch: {pitch:.2f}", (int(x1), int(y2) + 35), cv2.FONT_HERSHEY_SIMPLEX,
                                 0.75, (255, 0, 0), 2)
-                    cv2.putText(image, f"roll: {roll:.2f}", (int(x1), int(y2) + 50), cv2.FONT_HERSHEY_SIMPLEX, 0.75,
+                    cv2.putText(image, f"roll: {roll:.2f}", (int(x1), int(y2) + 60), cv2.FONT_HERSHEY_SIMPLEX, 0.75,
                                 (0, 0, 255), 2)
 
-                    # **Draw Face ID directly above the face without a green box**
+                    # Draw Face ID directly above the face
                     text = f'ID: {face_id}'
                     font = cv2.FONT_HERSHEY_SIMPLEX
                     font_scale = 0.6
                     font_thickness = 2
                     text_color = (255, 255, 255)  # White color for text
 
-                    # Get the size of the text
-                    (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, font_thickness)
                     # Position the text above the bounding box
-                    text_x = x1 - 30
-                    text_y = y1 + 20
+                    text_x = int(x1) - 30
+                    text_y = int(y1) + 20
 
                     # Put the white text directly without any background
                     cv2.putText(image, text,
@@ -147,8 +153,8 @@ class Drawer:
                                 text_color,
                                 font_thickness,
                                 cv2.LINE_AA)
-
         return image
+
 
     def draw_summary(self, image, engaged_count, discussion_count, total_faces, engaged_score, discussion_score,
                      total_engagement_score, mode):
