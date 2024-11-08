@@ -1,71 +1,65 @@
-import cv2
-import torch
+import subprocess
+import sys
 from pathlib import Path
-from src.models.hopenet import load_hopenet_model, estimate_head_pose, preprocess_face, get_head_pose_direction
-from src.detectors.yolov9FaceDetectionMain.yolov9.utils.general import non_max_suppression, scale_boxes
-from src.detectors.yolov9FaceDetectionMain.yolov9.utils.torch_utils import select_device
-from src.detectors.yolov9FaceDetectionMain.yolov9.models.common import DetectMultiBackend
 
-# Configuration
-yolo_weights = Path('src/detectors/yolov9FaceDetectionMain/preTrainedModel/best.pt')  # Adjust the path accordingly
-hopenet_weights = Path('src/models/shuff_epoch_120k.pth')  # Adjust the path accordingly
-device = select_device('cuda' if torch.cuda.is_available() else 'cpu')
-video_source = 0  # Webcam source or path to video file
+# Get the path to the directory where main.py is located
+FILE = Path(__file__).resolve()
+ROOT = FILE.parent  # Root directory of the project
 
-# Load YOLOv9 model
-yolo_model = DetectMultiBackend(yolo_weights, device=device)
-yolo_model.warmup(imgsz=(1, 3, 640, 640))  # Warmup with example input size
+# --- User-defined video file path ---
+SOURCE = Path('assets/video/classLow.mp4')  # Replace with an absolute or relative path as needed
 
-# Load HopeNet model
-hopenet_model = load_hopenet_model(hopenet_weights, device=device)
+# Paths to detect.py, weights, and default project folder
+DETECT_PY = ROOT / 'faceDetection' / 'yolov9FaceDetection' / 'yolov9' / 'detect.py'
+WEIGHTS = ROOT / 'faceDetection' / 'yolov9FaceDetection' / 'yolov9' / 'best.pt'
+PROJECT = ROOT / 'runs' / 'detect'
 
-# Video capture
-cap = cv2.VideoCapture(video_source)
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        break
+# Ensure detect.py, weights, and source video exist
+for path, name in [(DETECT_PY, "detect.py"), (WEIGHTS, "Weights file")]:
+    if not path.exists():
+        print(f"{name} not found at {path}")
+        sys.exit(1)
 
-    # Preprocess frame for YOLO
-    img = cv2.resize(frame, (640, 640))
-    img = torch.from_numpy(img).to(device)
-    img = img.half() if yolo_model.fp16 else img.float()
-    img /= 255.0  # Normalize
-    img = img.unsqueeze(0)  # Add batch dimension
+# Resolve SOURCE to an absolute path if it’s relative to ensure compatibility
+SOURCE = SOURCE if SOURCE.is_absolute() else (ROOT / SOURCE)
 
-    # Face detection with YOLOv9
-    pred = yolo_model(img)
-    pred = non_max_suppression(pred, conf_thres=0.25, iou_thres=0.45)
+# Check if the source video exists
+if not SOURCE.exists():
+    print(f"Source video not found at {SOURCE}")
+    sys.exit(1)
 
-    # Extract and scale bounding boxes
-    boxes = []
-    for det in pred:  # Per image
-        if len(det):
-            det[:, :4] = scale_boxes(img.shape[2:], det[:, :4], frame.shape).round()
-            for *xyxy, conf, cls in det:
-                boxes.append(xyxy)
+# Function to get an incremented experiment directory
+def get_incremented_exp_dir(base_dir, exp_name='exp'):
+    exp_dir = base_dir / exp_name
+    counter = 1
+    while exp_dir.exists():  # Increment until we find a non-existing directory
+        exp_dir = base_dir / f"{exp_name}{counter}"
+        counter += 1
+    return exp_dir
 
-    # Annotate the frame
-    for box in boxes:
-        x_min, y_min, x_max, y_max = map(int, box)
-        face_crop = frame[y_min:y_max, x_min:x_max]
+# Get the next available experiment directory
+exp_dir = get_incremented_exp_dir(PROJECT)
 
-        # Head pose estimation
-        if face_crop.size != 0:  # Ensure the face crop is valid
-            face_tensor = preprocess_face(face_crop)
-            yaw, pitch, roll = estimate_head_pose(hopenet_model, face_tensor, device)
-            head_pose = get_head_pose_direction(yaw, pitch, roll)
+# Build the command to run detect.py
+command = [
+    sys.executable,  # Use the same Python interpreter
+    str(DETECT_PY),
+    '--weights', str(WEIGHTS),
+    '--source', str(SOURCE),
+    '--project', str(PROJECT),
+    '--name', exp_dir.name,  # Save results in incremented exp directory
+    '--exist-ok',  # Overwrite existing results if necessary
+]
 
-            # Draw bounding box and head pose
-            cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
-            cv2.putText(frame, f'Head Pose: {head_pose}', (x_min, y_min - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.75, color=(0, 255, 0), thickness=2)
-
-    # Display the frame
-    cv2.imshow('Face and Head Pose Estimation', frame)
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-# Release resources
-cap.release()
-cv2.destroyAllWindows()
+# Run the detect.py script
+try:
+    result = subprocess.run(command, cwd=str(DETECT_PY.parent))
+    # Check if the subprocess exited with an error
+    if result.returncode != 0:
+        print("Error running detect.py")
+        sys.exit(1)
+    else:
+        print(f"Detection completed successfully. Results saved to {exp_dir}")
+except Exception as e:
+    print(f"An error occurred: {e}")
+    sys.exit(1)

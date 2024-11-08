@@ -22,7 +22,7 @@ https://drive.google.com/file/d/1PhOHWpWj37cYcSnRzdYnElHbUrFRBSHT/view
 ### Running the Code
 1. Open a terminal and navigate to the yolov9 directory:
    ```bash
-   cd src/detectors/yolov9FacedetectionMain/yolov9
+   cd src/faceDetection/yolov9Facedetection/yolov9
    
 2. Run the following command to start the engagement detection process:
    ```bash
