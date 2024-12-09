@@ -20,14 +20,25 @@ To run the model, you will need to download the pre-trained weights. Place the d
 https://drive.google.com/file/d/1PhOHWpWj37cYcSnRzdYnElHbUrFRBSHT/view
 
 ### Running the Code
-1. Open a terminal and navigate to the yolov9 directory:
-   ```bash
-   cd src/faceDetection/yolov9Facedetection/yolov9
-   
-2. Run the following command to start the engagement detection process:
-   ```bash
-   python detect.py --weights best.pt --source "your/image/video/path/here"
-Replace "your/image/video/path/here" with the path to your input image or video file.
+
+1. **Set the Video File Path**:
+   - Open the `main.py` file in the project root directory.
+   - Locate the line defining `SOURCE` near the top of the file:
+     ```python
+     SOURCE = Path('your/video/photo/path/here')
+     ```
+   - Replace `'your/video/photo/path/here'` with the path to your desired video or photo file. You can use either an absolute path (e.g., `C:\Users\user\videos\myfile.mp4` on Windows) or a relative path from the project root (e.g., `assets/video/myfile.mp4`).
+
+2. **Run the Detection Script**:
+   - Navigate to the project root directory:
+     ```bash
+     cd src
+     ```
+   - Run the following command to start the engagement detection process:
+     ```bash
+     python headPoseMain.py
+     ```
 
 ### Output
-After running the code, the analysis output will be saved in the runs/detect directory within subfolders like exp, exp2, etc., depending on the number of runs. Each folder contains the processed file.
+
+After running the code, the analysis output will be saved in the `runs/detect` directory in the src directory. Each run will create a new subfolder, such as `exp`, `exp2`, `exp3`, etc., incrementing automatically to keep each experiment’s output organized. Each folder will contain the processed files from the corresponding run.

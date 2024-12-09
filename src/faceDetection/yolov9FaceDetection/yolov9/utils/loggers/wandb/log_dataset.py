@@ -2,7 +2,7 @@ import argparse
 
 from wandb_utils import WandbLogger
 
-from utils.general import LOGGER
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.general import LOGGER
 
 WANDB_ARTIFACT_PREFIX = 'wandb-artifact://'
 

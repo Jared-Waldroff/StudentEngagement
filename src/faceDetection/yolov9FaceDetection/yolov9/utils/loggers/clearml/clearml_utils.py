@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from utils.plots import Annotator, colors
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.plots import Annotator, colors
 
 try:
     import clearml

@@ -13,12 +13,12 @@ if str(ROOT) not in sys.path:
 # ROOT = ROOT.relative_to(Path.cwd())  # relative
 
 import export
-from models.experimental import attempt_load
-from models.yolo import SegmentationModel
-from segment.val import run as val_seg
-from utils import notebook_init
-from utils.general import LOGGER, check_yaml, file_size, print_args
-from utils.torch_utils import select_device
+from src.faceDetection.yolov9FaceDetection.yolov9.models.experimental import attempt_load
+from src.faceDetection.yolov9FaceDetection.yolov9.models.yolo import SegmentationModel
+from src.faceDetection.yolov9FaceDetection.yolov9.segment.val import (run as val_seg)
+from src.faceDetection.yolov9FaceDetection.yolov9.utils import notebook_init
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.general import LOGGER, check_yaml, file_size, print_args
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.torch_utils import select_device
 from val import run as val_det
 
 

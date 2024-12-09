@@ -6,12 +6,12 @@ import torch.nn.functional as F
 
 from torchvision.ops import sigmoid_focal_loss
 
-from utils.general import xywh2xyxy, xyxy2xywh
-from utils.metrics import bbox_iou
-from utils.panoptic.tal.anchor_generator import dist2bbox, make_anchors, bbox2dist
-from utils.panoptic.tal.assigner import TaskAlignedAssigner
-from utils.torch_utils import de_parallel
-from utils.panoptic.general import crop_mask
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.general import xywh2xyxy, xyxy2xywh
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.metrics import bbox_iou
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.panoptic.tal.anchor_generator import dist2bbox, make_anchors, bbox2dist
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.panoptic.tal.assigner import TaskAlignedAssigner
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.torch_utils import de_parallel
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.panoptic.general import crop_mask
 
 
 def smooth_BCE(eps=0.1):  # https://github.com/ultralytics/yolov3/issues/238#issuecomment-598028441

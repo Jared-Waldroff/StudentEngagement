@@ -14,11 +14,11 @@ import seaborn as sn
 import torch
 from PIL import Image, ImageDraw, ImageFont
 
-from utils import TryExcept, threaded
-from utils.general import (CONFIG_DIR, FONT, LOGGER, check_font, check_requirements, clip_boxes, increment_path,
+from src.faceDetection.yolov9FaceDetection.yolov9.utils import TryExcept, threaded
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.general import (CONFIG_DIR, FONT, LOGGER, check_font, check_requirements, clip_boxes, increment_path,
                            is_ascii, xywh2xyxy, xyxy2xywh)
-from utils.metrics import fitness
-from utils.segment.general import scale_image
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.metrics import fitness
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.segment.general import scale_image
 
 # Settings
 RANK = int(os.getenv('RANK', -1))

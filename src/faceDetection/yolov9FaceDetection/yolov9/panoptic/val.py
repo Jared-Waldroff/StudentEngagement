@@ -18,20 +18,20 @@ ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 import torch.nn.functional as F
 import torchvision.transforms as transforms
 from pycocotools import mask as maskUtils
-from models.common import DetectMultiBackend
-from models.yolo import SegmentationModel
-from utils.callbacks import Callbacks
-from utils.coco_utils import getCocoIds, getMappingId, getMappingIndex
-from utils.general import (LOGGER, NUM_THREADS, TQDM_BAR_FORMAT, Profile, check_dataset, check_img_size,
+from src.faceDetection.yolov9FaceDetection.yolov9.models.common import DetectMultiBackend
+from src.faceDetection.yolov9FaceDetection.yolov9.models.yolo import SegmentationModel
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.callbacks import Callbacks
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.coco_utils import getCocoIds, getMappingId, getMappingIndex
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.general import (LOGGER, NUM_THREADS, TQDM_BAR_FORMAT, Profile, check_dataset, check_img_size,
                            check_requirements, check_yaml, coco80_to_coco91_class, colorstr, increment_path,
                            non_max_suppression, print_args, scale_boxes, xywh2xyxy, xyxy2xywh)
-from utils.metrics import ConfusionMatrix, box_iou
-from utils.plots import output_to_target, plot_val_study
-from utils.panoptic.dataloaders import create_dataloader
-from utils.panoptic.general import mask_iou, process_mask, process_mask_upsample, scale_image
-from utils.panoptic.metrics import Metrics, ap_per_class_box_and_mask, Semantic_Metrics
-from utils.panoptic.plots import plot_images_and_masks
-from utils.torch_utils import de_parallel, select_device, smart_inference_mode
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.metrics import ConfusionMatrix, box_iou
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.plots import output_to_target, plot_val_study
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.panoptic.dataloaders import create_dataloader
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.panoptic.general import mask_iou, process_mask, process_mask_upsample, scale_image
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.panoptic.metrics import Metrics, ap_per_class_box_and_mask, Semantic_Metrics
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.panoptic.plots import plot_images_and_masks
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.torch_utils import de_parallel, select_device, smart_inference_mode
 
 
 def save_one_txt(predn, save_conf, shape, file):

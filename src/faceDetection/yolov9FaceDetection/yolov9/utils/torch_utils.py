@@ -14,8 +14,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from utils.general import LOGGER, check_version, colorstr, file_date, git_describe
-from utils.lion import Lion
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.general import LOGGER, check_version, colorstr, file_date, git_describe
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.lion import Lion
 
 LOCAL_RANK = int(os.getenv('LOCAL_RANK', -1))  # https://pytorch.org/docs/stable/elastic/run.html
 RANK = int(os.getenv('RANK', -1))
@@ -61,7 +61,7 @@ def smart_DDP(model):
 
 def reshape_classifier_output(model, n=1000):
     # Update a TorchVision classification model to class count 'n' if required
-    from models.common import Classify
+    from src.faceDetection.yolov9FaceDetection.yolov9.models.common import Classify
     name, m = list((model.model if hasattr(model, 'model') else model).named_children())[-1]  # last module
     if isinstance(m, Classify):  # YOLOv5 Classify() head
         if m.linear.out_features != n:
@@ -103,7 +103,7 @@ def device_count():
 
 def select_device(device='', batch_size=0, newline=True):
     # device = None or 'cpu' or 0 or '0' or '0,1,2,3'
-    s = f'YOLOv5 🚀 {git_describe() or file_date()} Python-{platform.python_version()} torch-{torch.__version__} '
+    s = f'YOLOv9 🚀 {git_describe() or file_date()} Python-{platform.python_version()} torch-{torch.__version__} '
     device = str(device).strip().lower().replace('cuda:', '').replace('none', '')  # to string, 'cuda:0' to '0'
     cpu = device == 'cpu'
     mps = device == 'mps'  # Apple Metal Performance Shaders (MPS)

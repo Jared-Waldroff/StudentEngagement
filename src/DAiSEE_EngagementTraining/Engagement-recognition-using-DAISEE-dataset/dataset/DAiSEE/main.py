@@ -1,4 +1,4 @@
-# main.py
+# headPoseMain.py
 from dataset import load_daisee_datasets
 from train import train_model
 from save_model import save_model

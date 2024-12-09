@@ -3,9 +3,9 @@
 import torch
 import cv2
 from pathlib import Path
-from src.faceDetection.yolov9faceDetection.models.common import DetectMultiBackend
-from src.faceDetection.yolov9faceDetection.utils.general import (check_file, check_img_size, non_max_suppression, scale_boxes)
-from src.faceDetection.yolov9faceDetection.utils.torch_utils import select_device
+from src.faceDetection.yolov9FaceDetection.yolov9.models.common import DetectMultiBackend
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.general import (check_file, check_img_size, non_max_suppression, scale_boxes)
+from src.faceDetection.yolov9FaceDetection.yolov9.utils.torch_utils import select_device
 
 def load_yolo_model(weights, device):
     # Load the YOLO model

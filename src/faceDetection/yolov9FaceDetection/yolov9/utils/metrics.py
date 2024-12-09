@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-from utils import TryExcept, threaded
+from src.faceDetection.yolov9FaceDetection.yolov9.utils import TryExcept, threaded
 
 
 def fitness(x):
