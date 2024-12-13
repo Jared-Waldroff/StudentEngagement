@@ -43,7 +43,7 @@ from basicsr.archs.rrdbnet_arch import RRDBNet
 
 @smart_inference_mode()
 def run(
-        weights=ROOT / 'yolo.pt',  # model path or triton URL
+        weights=ROOT / '../../../downloadedWeights/best.pt',  # model path or triton URL
         source=ROOT / 'data/images',  # file/dir/URL/glob/screen/0(webcam)
         data=ROOT / 'data/coco.yaml',  # dataset.yaml path
         imgsz=(640, 640),  # inference size (height, width)
@@ -115,7 +115,7 @@ def run(
     # Create the upsampler
     upsampler = RealESRGANer(
         scale=4,
-        model_path='../../../upscalingModels/RealESRGAN_x4plus.pth',
+        model_path='../../../downloadedWeights/RealESRGAN_x4plus.pth',
         model=model,
         tile=0,
         tile_pad=10,
@@ -704,7 +704,7 @@ def run(
 
 def parse_opt():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'yolo.pt', help='model path or triton URL')
+    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / '../../../downloadedWeights/best.pt', help='model path or triton URL')
     parser.add_argument('--source', type=str, default=ROOT / 'data/images',
                         help='file/dir/URL/glob/screen/0(webcam)')
     parser.add_argument('--data', type=str, default=ROOT / 'data/coco.yaml', help='(optional) dataset.yaml path')

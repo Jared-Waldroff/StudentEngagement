@@ -15,9 +15,9 @@ Student Engagement is a tool that leverages computer vision and deep learning to
    pip install -r requirements.txt
 
 ### Download Weights
-To run the model, you will need to download the pre-trained weights. Place the downloaded weights file in the yolov9 directory:
+To run the model, you will need to download the pre-trained weights. Place the downloaded weights into the downloadedWeights folder:
 
-https://drive.google.com/file/d/1PhOHWpWj37cYcSnRzdYnElHbUrFRBSHT/view
+https://drive.google.com/drive/folders/1bKONWeT_4BdGuKLBnXTAoTKvW0rv7lt5?usp=sharing
 
 ### Running the Code
 

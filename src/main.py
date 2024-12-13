@@ -19,7 +19,7 @@ ROOT = FILE.parent  # Root directory of the project
 
 # Paths to detect.py, weights, and default project folder
 DETECT_PY = ROOT / 'faceDetection' / 'yolov9FaceDetection' / 'yolov9' / 'detect.py'
-WEIGHTS = ROOT / 'faceDetection' / 'yolov9FaceDetection' / 'yolov9' / 'best.pt'
+WEIGHTS = ROOT / 'downloadedWeights' / 'best.pt'
 PROJECT = ROOT / 'runs' / 'detect'
 
 # Ensure detect.py, weights, and source video exist
