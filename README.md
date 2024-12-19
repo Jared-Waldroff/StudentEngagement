@@ -1,6 +1,8 @@
 # Student Engagement
 
-Student Engagement is a tool that leverages computer vision and deep learning to analyze student engagement in a classroom setting. By detecting and analyzing students' facial expressions, this tool generates reports on engagement levels throughout a class session, providing valuable insights for educators.
+SDEM (Student Engagement Detection Model) is a tool that leverages computer vision and deep learning to analyze student engagement in a classroom setting. By detecting and analyzing students' facial expressions, this tool generates reports on engagement levels throughout a class session, providing valuable insights for educators.
+
+Created alongside professors Dr. Adballah Mohamed & Dr. Mohamed Shehata from the University of British Columbia Okanagan
 
 ## Getting Started
 
