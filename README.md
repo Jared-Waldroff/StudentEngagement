@@ -4,6 +4,8 @@ SDEM (Student Engagement Detection Model) is a tool that leverages computer visi
 
 Created alongside professors Dr. Adballah Mohamed & Dr. Mohamed Shehata from the University of British Columbia Okanagan
 
+Video Walkthrough - https://youtu.be/3VOL_vuniIc
+
 ## Getting Started
 
 ### Prerequisites
